@@ -1,0 +1,15 @@
+[package]
+name = "roshamble"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8.1"
+dotenv = "0.15.0"
+serde = "1.0.217"
+serde_json = "1.0.138"
+sqlx = { version = "0.8.3", features = ["postgres", "runtime-tokio-native-tls", "uuid"] }
+tokio = { version = "1.43.0", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+uuid = "1.13.1"
