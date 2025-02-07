@@ -11,6 +11,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use std::time::Duration;
 
+mod handlers;
+mod routes;
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -32,12 +35,18 @@ async fn main() {
         .await
         .expect("can't connect to database");
 
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("can't run migrations");
+
     // build our application with some routes
     let app = Router::new()
         .route(
             "/",
             get(using_connection_pool_extractor).post(using_connection_extractor),
         )
+        .merge(routes::auth_routes::add_routes())
         .with_state(pool);
 
     // run it with hyper

@@ -1,0 +1,2 @@
+2/6/25: Worked on Auth routes like sign up and login. Just hashed some passwords, but still don't know how to get type safe data back from the DB.
+Next let's create a user and then log in with them. Then we can maybe do some JWT stuff.
