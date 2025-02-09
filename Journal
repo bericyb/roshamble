@@ -1,2 +1,5 @@
 2/6/25: Worked on Auth routes like sign up and login. Just hashed some passwords, but still don't know how to get type safe data back from the DB.
 Next let's create a user and then log in with them. Then we can maybe do some JWT stuff.
+
+2/9/25: Created jwt token stuff. Hashing and verifying passwords, but I have not tested it yet. Started looking into templating engines. I think I will use handlebars. I also need to figure out how to get type safe data back from the DB.
+Next let's create some html templates and get some pages up. (Tailwind, HTMX, Handlebars) Maybe we will separate the handlers and the DAO layer as well so we can make testing easier.
