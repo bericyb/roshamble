@@ -1,18 +1,29 @@
 use axum::{
-    extract::{FromRef, FromRequestParts, State},
-    http::{request::Parts, StatusCode},
-    routing::get,
+    body::Body,
+    extract::State,
+    http::Response,
+    response::{Html, IntoResponse},
+    routing::any,
     Router,
 };
+use handlebars::{DirectorySourceOptions, Handlebars};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use tokio::net::TcpListener;
+use tower_http::services::ServeDir;
 use tracing;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
+mod data;
 mod handlers;
 mod routes;
+
+#[derive(Clone)]
+struct AppState {
+    pub templates: Arc<Handlebars<'static>>,
+    pool: PgPool,
+}
 
 #[tokio::main]
 async fn main() {
@@ -27,7 +38,6 @@ async fn main() {
     let db_connection_str = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:password@localhost".to_string());
 
-    // set up connection pool
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .acquire_timeout(Duration::from_secs(3))
@@ -40,14 +50,27 @@ async fn main() {
         .await
         .expect("can't run migrations");
 
-    // build our application with some routes
+    let mut handlebars = Handlebars::new();
+
+    handlebars.set_dev_mode(dotenv::var("ENVIRONMENT").unwrap() == "development");
+
+    let mut options = DirectorySourceOptions::default();
+    options.tpl_extension = ".html".to_string();
+
+    handlebars
+        .register_templates_directory("templates/", options)
+        .expect("Failed to register templates");
+
+    let app_state = AppState {
+        templates: Arc::new(handlebars),
+        pool,
+    };
+
     let app = Router::new()
-        .route(
-            "/",
-            get(using_connection_pool_extractor).post(using_connection_extractor),
-        )
+        .route("/", any(serve_index))
         .merge(routes::auth_routes::add_routes())
-        .with_state(pool);
+        .merge(Router::new().nest_service("/assets", ServeDir::new("assets")))
+        .with_state(app_state);
 
     // run it with hyper
     let listener = TcpListener::bind("127.0.0.1:4000").await.unwrap();
@@ -55,50 +78,12 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-// we can extract the connection pool with `State`
-async fn using_connection_pool_extractor(
-    State(pool): State<PgPool>,
-) -> Result<String, (StatusCode, String)> {
-    sqlx::query_scalar("select 'hello world from pg'")
-        .fetch_one(&pool)
-        .await
-        .map_err(internal_error)
-}
-
-// we can also write a custom extractor that grabs a connection from the pool
-// which setup is appropriate depends on your application
-struct DatabaseConnection(sqlx::pool::PoolConnection<sqlx::Postgres>);
-
-impl<S> FromRequestParts<S> for DatabaseConnection
-where
-    PgPool: FromRef<S>,
-    S: Send + Sync,
-{
-    type Rejection = (StatusCode, String);
-
-    async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let pool = PgPool::from_ref(state);
-
-        let conn = pool.acquire().await.map_err(internal_error)?;
-
-        Ok(Self(conn))
-    }
-}
-
-async fn using_connection_extractor(
-    DatabaseConnection(mut conn): DatabaseConnection,
-) -> Result<String, (StatusCode, String)> {
-    sqlx::query_scalar("select 'hello world from pg'")
-        .fetch_one(&mut *conn)
-        .await
-        .map_err(internal_error)
-}
-
-/// Utility function for mapping any error into a `500 Internal Server Error`
-/// response.
-fn internal_error<E>(err: E) -> (StatusCode, String)
-where
-    E: std::error::Error,
-{
-    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+async fn serve_index(State(state): State<AppState>) -> Html<Response<Body>> {
+    return Html(
+        state
+            .templates
+            .render("index", &serde_json::json!({}))
+            .unwrap()
+            .into_response(),
+    );
 }
