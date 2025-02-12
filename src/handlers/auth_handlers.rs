@@ -18,6 +18,7 @@ pub async fn get_sign_up(State(state): State<AppState>) -> impl IntoResponse {
                 "auth/register",
                 &SignUpResponse {
                     message: "".to_string(),
+                    token: Some("".to_string()),
                 },
             )
             .unwrap()
@@ -32,13 +33,13 @@ pub async fn sign_up(
     let response = users::sign_up_user(state.pool, form).await;
 
     let mut headers = HeaderMap::new();
-    if response.0.is_success() {
+    if response.0.is_success() && response.1.token.is_some() {
         headers.insert("HX-Redirect", "/dashboard".parse().unwrap());
         headers.insert(
             "Set-Cookie",
             format!(
                 "jwt={}; HttpOnly; Secure; SameSite=Strict",
-                response.1.token
+                response.1.token.unwrap()
             )
             .parse()
             .unwrap(),
