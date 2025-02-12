@@ -1,5 +1,6 @@
 use axum::{
     extract::State,
+    http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse},
     Form,
 };
@@ -30,31 +31,24 @@ pub async fn sign_up(
 ) -> impl IntoResponse {
     let response = users::sign_up_user(state.pool, form).await;
 
+    let mut headers = HeaderMap::new();
     if response.0.is_success() {
-        return Html(
-            state
-                .templates
-                .render("auth/login", &response.1)
-                .unwrap()
-                .into_response(),
+        headers.insert("HX-Redirect", "/dashboard".parse().unwrap());
+        headers.insert(
+            "Set-Cookie",
+            format!(
+                "jwt={}; HttpOnly; Secure; SameSite=Strict",
+                response.1.token
+            )
+            .parse()
+            .unwrap(),
         );
+        return (StatusCode::OK, headers, "").into_response();
+    } else if response.0.is_client_error() {
+        return (StatusCode::BAD_REQUEST, response.1.message).into_response();
+    } else {
+        return (StatusCode::INTERNAL_SERVER_ERROR, response.1.message).into_response();
     }
-    if !response.0.is_success() {
-        return Html(
-            state
-                .templates
-                .render("auth/register", &response.1)
-                .unwrap()
-                .into_response(),
-        );
-    }
-    return Html(
-        state
-            .templates
-            .render("auth/register", &response.1)
-            .unwrap()
-            .into_response(),
-    );
 }
 
 pub async fn get_log_in(State(state): State<AppState>) -> impl IntoResponse {
@@ -79,21 +73,33 @@ pub async fn log_in(
 ) -> impl IntoResponse {
     let response = users::log_in_user(state.pool, form).await;
 
+    let mut headers = HeaderMap::new();
     if response.0.is_success() {
-        return Html(
-            state
-                .templates
-                .render("dashboard", &response.1)
-                .unwrap()
-                .into_response(),
-        );
+        headers.insert("HX-Redirect", "/dashboard".parse().unwrap());
+        return (StatusCode::OK, headers, "").into_response();
+    } else if response.0.is_client_error() {
+        return (StatusCode::BAD_REQUEST, response.1.message).into_response();
     } else {
-        return Html(
-            state
-                .templates
-                .render("auth/login", &response.1)
-                .unwrap()
-                .into_response(),
-        );
+        return (StatusCode::INTERNAL_SERVER_ERROR, response.1.message).into_response();
     }
+}
+
+pub async fn password_reset(State(state): State<AppState>) -> impl IntoResponse {
+    return Html(
+        state
+            .templates
+            .render("auth/password_reset", &serde_json::json!({}))
+            .unwrap()
+            .into_response(),
+    );
+}
+
+pub async fn get_password_reset(State(state): State<AppState>) -> impl IntoResponse {
+    return Html(
+        state
+            .templates
+            .render("auth/password_reset", &serde_json::json!({}))
+            .unwrap()
+            .into_response(),
+    );
 }
