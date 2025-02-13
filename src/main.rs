@@ -1,12 +1,15 @@
 use axum::{
     body::Body,
-    extract::State,
+    extract::{Request, State},
     http::Response,
-    response::{Html, IntoResponse},
+    middleware::{from_fn, Next},
+    response::{Html, IntoResponse, Redirect},
     routing::any,
     Router,
 };
+use data::users::Claims;
 use handlebars::{DirectorySourceOptions, Handlebars};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
@@ -67,9 +70,11 @@ async fn main() {
     };
 
     let app = Router::new()
-        .route("/", any(serve_index))
+        .merge(routes::authenticated_routes::add_routes())
+        .layer(from_fn(auth_middleware))
         .merge(routes::auth_routes::add_routes())
         .merge(Router::new().nest_service("/assets", ServeDir::new("assets")))
+        .route("/", any(serve_index))
         .with_state(app_state);
 
     // run it with hyper
@@ -86,4 +91,33 @@ async fn serve_index(State(state): State<AppState>) -> Html<Response<Body>> {
             .unwrap()
             .into_response(),
     );
+}
+
+// Middleware to check Authorization header
+async fn auth_middleware(req: Request, next: Next) -> impl IntoResponse {
+    let secret = dotenv::var("SECRET").unwrap();
+    if let Some(header) = req.headers().get("Authorization") {
+        match header.to_str() {
+            Ok(auth) => {
+                if validate_jwt(auth, &secret).is_ok() {
+                    return next.run(req).await;
+                }
+            }
+            Err(_) => {
+                return Redirect::temporary("/").into_response();
+            }
+        }
+    }
+    tracing::debug!("No Authorization header found");
+    return Redirect::temporary("/").into_response();
+}
+
+fn validate_jwt(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(secret.as_ref()),
+        &Validation::new(Algorithm::HS256),
+    )?;
+
+    Ok(token_data.claims)
 }

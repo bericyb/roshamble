@@ -32,9 +32,8 @@ pub async fn sign_up_user(
     match res {
         Ok(_) => {
             let res = sqlx::query!(
-                "SELECT username, email, password FROM users WHERE email = $1 AND password = $2;",
+                "SELECT username, email, password FROM users WHERE email = $1",
                 &body.email,
-                hashed_password
             )
             .fetch_one(&pool)
             .await;

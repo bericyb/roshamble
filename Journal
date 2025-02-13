@@ -9,3 +9,6 @@ Next let's render some html templates and serve them up. Try to get a whole auth
 
 2/10/25: Got some htmx rendered and flowbite kinda set up. But now we're serving HTML.
 Next let's get that whole auth cycle in and fix the flowbite stuff that's missing like the js stuff and dark mode toggles.
+
+2/11/25: Got the auth cycle in. Now we're serving HTML and we refactored the handlers to return straight html or redirects
+Next let's get the dashboard together
