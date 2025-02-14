@@ -12,3 +12,9 @@ Next let's get that whole auth cycle in and fix the flowbite stuff that's missin
 
 2/11/25: Got the auth cycle in. Now we're serving HTML and we refactored the handlers to return straight html or redirects
 Next let's get the dashboard together
+
+2/12/25: Got a basic dashboard served up and auth middleware :)
+Next let's get the html rendering and returning a little cleaner and refactor the handlers to also have the html returning probably
+Then our template will be done so we can start on the game stuff
+
+2/13/25: Separate stuff into Routes -> Handlers -> Services: This means that Routes declare the actual endpoints, Handlers are about the returning html and requests, and Services are about the logic and data.

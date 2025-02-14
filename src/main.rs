@@ -7,9 +7,10 @@ use axum::{
     routing::any,
     Router,
 };
-use data::users::Claims;
+use axum_extra::extract::{cookie::Cookie, CookieJar};
 use handlebars::{DirectorySourceOptions, Handlebars};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use services::users_service::Claims;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
@@ -18,9 +19,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use std::{sync::Arc, time::Duration};
 
-mod data;
 mod handlers;
 mod routes;
+mod services;
 
 #[derive(Clone)]
 struct AppState {
@@ -71,10 +72,10 @@ async fn main() {
 
     let app = Router::new()
         .merge(routes::authenticated_routes::add_routes())
-        .layer(from_fn(auth_middleware))
-        .merge(routes::auth_routes::add_routes())
-        .merge(Router::new().nest_service("/assets", ServeDir::new("assets")))
         .route("/", any(serve_index))
+        .layer(from_fn(auth_middleware))
+        .merge(routes::public_routes::add_routes())
+        .merge(Router::new().nest_service("/assets", ServeDir::new("assets")))
         .with_state(app_state);
 
     // run it with hyper
@@ -94,21 +95,27 @@ async fn serve_index(State(state): State<AppState>) -> Html<Response<Body>> {
 }
 
 // Middleware to check Authorization header
-async fn auth_middleware(req: Request, next: Next) -> impl IntoResponse {
+async fn auth_middleware(cookies: CookieJar, req: Request, next: Next) -> impl IntoResponse {
     let secret = dotenv::var("SECRET").unwrap();
-    if let Some(header) = req.headers().get("Authorization") {
-        match header.to_str() {
-            Ok(auth) => {
-                if validate_jwt(auth, &secret).is_ok() {
-                    return next.run(req).await;
+    cookies.iter().for_each(|cookie| {
+        tracing::debug!("Cookie: {}={}", cookie.name(), cookie.value());
+    });
+    if let Some(auth_cookie) = cookies.get("Authorization") {
+        match validate_jwt(auth_cookie.value(), &secret) {
+            Ok(_) => {
+                if req.uri().path() == "/" {
+                    return Redirect::temporary("/dashboard").into_response();
                 }
+                return next.run(req).await;
             }
-            Err(_) => {
-                return Redirect::temporary("/").into_response();
+            Err(e) => {
+                let new_jar = cookies.remove(Cookie::from("Authorization"));
+                return (new_jar, Redirect::temporary("/")).into_response();
             }
         }
+    } else if req.uri().path() == "/" {
+        return next.run(req).await;
     }
-    tracing::debug!("No Authorization header found");
     return Redirect::temporary("/").into_response();
 }
 

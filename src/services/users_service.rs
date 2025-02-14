@@ -41,11 +41,13 @@ pub async fn sign_up_user(
             match res {
                 Ok(user) => {
                     if bcrypt::verify(body.password, &user.password).unwrap() {
+                        // Set expiration time to 1 year
                         let claims = Claims {
                             sub: 0,
                             username: user.username.clone(),
                             email: user.email,
-                            exp: 0,
+                            exp: (chrono::Utc::now() + chrono::Duration::days(365)).timestamp()
+                                as usize,
                         };
                         match jwt::encode(
                             &jwt::Header::default(),
@@ -165,11 +167,9 @@ pub struct LoginResponse {
 }
 
 pub async fn log_in_user(pool: Pool<Postgres>, body: LoginRequest) -> (StatusCode, LoginResponse) {
-    let hashed_password = bcrypt::hash(body.password.clone(), 12).unwrap();
     let res = sqlx::query!(
-        "SELECT username, email, password FROM users WHERE (username = $1 or email = $1) AND password = $2;",
+        "SELECT username, email, password FROM users WHERE (username = $1 or email = $1);",
         &body.username_or_email,
-        hashed_password
     )
     .fetch_one(&pool)
     .await;
@@ -177,11 +177,12 @@ pub async fn log_in_user(pool: Pool<Postgres>, body: LoginRequest) -> (StatusCod
     match res {
         Ok(user) => {
             if bcrypt::verify(body.password, &user.password).unwrap() {
+                // Expiration time is 1 year from now
                 let claims = Claims {
                     sub: 0,
                     username: user.username.clone(),
                     email: user.email,
-                    exp: 0,
+                    exp: (chrono::Utc::now() + chrono::Duration::days(365)).timestamp() as usize,
                 };
                 let token = match jwt::encode(
                     &jwt::Header::default(),

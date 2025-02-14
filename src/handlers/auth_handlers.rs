@@ -1,12 +1,12 @@
 use axum::{
     extract::State,
-    http::{HeaderMap, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse},
     Form,
 };
 
 use crate::{
-    data::users::{self, LoginRequest, LoginResponse, NewUserRequest, SignUpResponse},
+    services::users_service::{self, LoginRequest, LoginResponse, NewUserRequest, SignUpResponse},
     AppState,
 };
 
@@ -30,20 +30,19 @@ pub async fn sign_up(
     State(state): State<AppState>,
     Form(form): Form<NewUserRequest>,
 ) -> impl IntoResponse {
-    let response = users::sign_up_user(state.pool, form).await;
+    let response = users_service::sign_up_user(state.pool, form).await;
 
     let mut headers = HeaderMap::new();
     if response.0.is_success() && response.1.token.is_some() {
-        headers.insert("HX-Redirect", "/dashboard".parse().unwrap());
         headers.insert(
-            "Set-Cookie",
-            format!(
-                "jwt={}; HttpOnly; Secure; SameSite=Strict",
-                response.1.token.unwrap()
-            )
-            .parse()
+            header::SET_COOKIE,
+            HeaderValue::from_str(&format!(
+                "Authorization={}; HttpOnly; Secure; Path=/; SameSite=Strict",
+                response.1.token.unwrap_or("".to_string())
+            ))
             .unwrap(),
         );
+        headers.insert("HX-Redirect", "/dashboard".parse().unwrap());
         return (StatusCode::OK, headers, "").into_response();
     } else if response.0.is_client_error() {
         return (StatusCode::BAD_REQUEST, response.1.message).into_response();
@@ -72,10 +71,18 @@ pub async fn log_in(
     State(state): State<AppState>,
     Form(form): Form<LoginRequest>,
 ) -> impl IntoResponse {
-    let response = users::log_in_user(state.pool, form).await;
+    let response = users_service::log_in_user(state.pool, form).await;
 
     let mut headers = HeaderMap::new();
     if response.0.is_success() {
+        headers.insert(
+            header::SET_COOKIE,
+            HeaderValue::from_str(&format!(
+                "Authorization={}; HttpOnly; Secure; Path=/; SameSite=Strict",
+                response.1.token
+            ))
+            .unwrap(),
+        );
         headers.insert("HX-Redirect", "/dashboard".parse().unwrap());
         return (StatusCode::OK, headers, "").into_response();
     } else if response.0.is_client_error() {
