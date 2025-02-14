@@ -18,3 +18,5 @@ Next let's get the html rendering and returning a little cleaner and refactor th
 Then our template will be done so we can start on the game stuff
 
 2/13/25: Separate stuff into Routes -> Handlers -> Services: This means that Routes declare the actual endpoints, Handlers are about the returning html and requests, and Services are about the logic and data.
+Got the refactor squared away. Not too bad since we're early on in this.
+Next let's make some quick scripts to copy and set up the project as a template then let's see if we can ship this game fast.
