@@ -95,20 +95,21 @@ async fn serve_index(State(state): State<AppState>) -> Html<Response<Body>> {
 }
 
 // Middleware to check Authorization header
-async fn auth_middleware(cookies: CookieJar, req: Request, next: Next) -> impl IntoResponse {
+async fn auth_middleware(cookies: CookieJar, mut req: Request, next: Next) -> impl IntoResponse {
     let secret = dotenv::var("SECRET").unwrap();
     cookies.iter().for_each(|cookie| {
         tracing::debug!("Cookie: {}={}", cookie.name(), cookie.value());
     });
     if let Some(auth_cookie) = cookies.get("Authorization") {
         match validate_jwt(auth_cookie.value(), &secret) {
-            Ok(_) => {
+            Ok(claims) => {
                 if req.uri().path() == "/" {
                     return Redirect::temporary("/dashboard").into_response();
                 }
+                req.extensions_mut().insert(claims);
                 return next.run(req).await;
             }
-            Err(e) => {
+            Err(_) => {
                 let new_jar = cookies.remove(Cookie::from("Authorization"));
                 return (new_jar, Redirect::temporary("/")).into_response();
             }

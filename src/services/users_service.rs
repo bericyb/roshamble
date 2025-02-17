@@ -1,6 +1,7 @@
 use axum::http::StatusCode;
 use jsonwebtoken as jwt;
 use sqlx::{Pool, Postgres};
+use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
 pub struct NewUserRequest {
@@ -32,7 +33,7 @@ pub async fn sign_up_user(
     match res {
         Ok(_) => {
             let res = sqlx::query!(
-                "SELECT username, email, password FROM users WHERE email = $1",
+                "SELECT id, username, email, password FROM users WHERE email = $1",
                 &body.email,
             )
             .fetch_one(&pool)
@@ -46,6 +47,7 @@ pub async fn sign_up_user(
                             sub: 0,
                             username: user.username.clone(),
                             email: user.email,
+                            id: user.id.to_string(),
                             exp: (chrono::Utc::now() + chrono::Duration::days(365)).timestamp()
                                 as usize,
                         };
@@ -152,10 +154,11 @@ pub struct LoginRequest {
     password: String,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct Claims {
     sub: i32,
-    username: String,
+    pub username: String,
+    pub id: String,
     email: String,
     exp: usize,
 }
@@ -168,7 +171,7 @@ pub struct LoginResponse {
 
 pub async fn log_in_user(pool: Pool<Postgres>, body: LoginRequest) -> (StatusCode, LoginResponse) {
     let res = sqlx::query!(
-        "SELECT username, email, password FROM users WHERE (username = $1 or email = $1);",
+        "SELECT id, username, email, password FROM users WHERE (username = $1 or email = $1);",
         &body.username_or_email,
     )
     .fetch_one(&pool)
@@ -181,6 +184,7 @@ pub async fn log_in_user(pool: Pool<Postgres>, body: LoginRequest) -> (StatusCod
                 let claims = Claims {
                     sub: 0,
                     username: user.username.clone(),
+                    id: user.id.to_string(),
                     email: user.email,
                     exp: (chrono::Utc::now() + chrono::Duration::days(365)).timestamp() as usize,
                 };
