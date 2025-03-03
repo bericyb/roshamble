@@ -2,3 +2,6 @@
 .env
 /node_modules
 .DS_Store
+./rust/target/*
+**/target
+**/node_modules
