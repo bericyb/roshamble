@@ -1,0 +1,2 @@
+-- +goose Up
+ALTER TABLE users ADD COLUMN elo INT DEFAULT 0;
